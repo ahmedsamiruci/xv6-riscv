@@ -29,6 +29,14 @@ sys_fork(void)
   return fork();
 }
 
+
+uint64
+sys_pcb(void)
+{
+  return pcb();
+}
+
+
 uint64
 sys_wait(void)
 {

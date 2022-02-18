@@ -441,10 +441,16 @@ scheduler(void)
   struct cpu *c = mycpu();
   
   c->proc = 0;
+ // int count = 0;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
-
+/*    
+    if (count++ > 1000){
+      printf(".");
+      count = 0;
+    }
+*/
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
@@ -653,4 +659,10 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+int
+pcb(void){
+  procdump();
+  return 1;
 }
