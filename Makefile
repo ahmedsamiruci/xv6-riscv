@@ -133,6 +133,7 @@ UPROGS=\
 	$U/_wc\
 	$U/_zombie\
 	$U/_pcb\
+	$U/_test\
 
 #reduced version of user processes
 #UPROGS=\
