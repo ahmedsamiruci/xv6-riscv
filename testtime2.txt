@@ -1,0 +1,55 @@
+[14:43:54.539129] qemu-system-riscv64 -machine virt -bios none -kernel kernel/kernel -m 128M -smp 1 -nographic -drive file=fs.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+[14:43:54.586946] 
+[14:43:54.587160] xv6 kernel is booting
+[14:43:54.587196] 
+[14:43:55.061937] init: starting sh
+[14:44:33.450867] $ 
+[14:44:33.610242] $ 
+[14:44:33.770212] $ 
+[14:44:33.914159] $ 
+[14:44:34.050212] $ 
+[14:44:36.041622] $ testw &; test &
+[14:44:36.067576] $ start while(1)
+[14:44:36.199054] start test process with 1 children with alg. step 1
+[14:44:36.199299] 
+[14:44:36.205494] [Parent-11] creating child process -> {12}
+[14:44:36.392286] [child-12] child process created
+[14:44:46.717868] [Parent-11] done with calculations, with 105 ticks!
+[14:44:46.717967] 
+[14:44:46.718348] 1 sleep  init
+[14:44:46.718548] 2 sleep  sh
+[14:44:46.718898] 12 runble test
+[14:44:46.719154] 11 run    test
+[14:44:46.719582] 10 runble testw
+[14:44:46.726399] [Parent-11] enter waiting state....
+[14:44:53.412657] [child-12] done with Calculations, with 170 ticks!
+[14:44:53.417069] print pcb then exit process {12}!!
+[14:44:53.417187] 
+[14:44:53.417258] 1 sleep  init
+[14:44:53.417363] 2 sleep  sh
+[14:44:53.417457] 12 run    test
+[14:44:53.417568] 11 sleep  test
+[14:44:53.417691] 10 runble testw
+[14:44:53.425008] print pcb then exit process {11}!!
+[14:44:53.425128] 
+[14:44:53.425236] 1 sleep  init
+[14:44:53.425321] 2 sleep  sh
+[14:44:53.425435] 11 run    test
+[14:44:53.425662] 10 runble testw
+[14:44:55.505307] 
+[14:44:56.016985] $ 
+[14:44:56.192913] $ 
+[14:44:58.128692] $ pcb
+[14:44:58.492548] 
+[14:44:58.492620] 1 sleep  init
+[14:44:58.492661] 2 sleep  sh
+[14:44:58.492727] 16 run    pcb
+[14:44:58.492813] 10 runble testw
+[14:45:06.736452] $ kill 10
+[14:45:07.528246] $ 
+[14:45:07.787626] $ 
+[14:45:09.255986] $ pcb
+[14:45:09.265725] 
+[14:45:09.265822] 1 sleep  init
+[14:45:09.265840] 2 sleep  sh
+[14:45:09.265900] 20 run    pcb

@@ -26,3 +26,14 @@
 # change timer interval
     > change scratch register in start.c file using syscall
     > at sysproc -> pass the parameter of the system call
+
+
+
+// append to the file
+make qemu | ts '[%H:%M:%.S]' | tee -a ./testtime.txt
+
+// create/replace file
+make qemu | ts '[%H:%M:%.S]' | tee ./testtime.txt
+
+
+make qemu | tee -a ./testtime.txt | ts '[%H:%M:%.S]'

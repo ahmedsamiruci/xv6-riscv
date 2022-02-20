@@ -135,6 +135,8 @@ UPROGS=\
 	$U/_pcb\
 	$U/_test\
 	$U/_testinter\
+	$U/_testw\
+	$U/_testp\
 
 
 fs.img: mkfs/mkfs README $(UPROGS)
