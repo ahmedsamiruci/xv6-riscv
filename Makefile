@@ -134,13 +134,7 @@ UPROGS=\
 	$U/_zombie\
 	$U/_pcb\
 	$U/_test\
-
-#reduced version of user processes
-#UPROGS=\
-	$U/_init\
-	$U/_kill\
-	$U/_ls\
-	$U/_sh\
+	$U/_testinter\
 
 
 fs.img: mkfs/mkfs README $(UPROGS)
