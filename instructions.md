@@ -18,3 +18,11 @@
     > usys.S
     > syscall.c
     > create a user process and include it to UPROC
+
+
+
+
+
+# change timer interval
+    > change scratch register in start.c file using syscall
+    > at sysproc -> pass the parameter of the system call

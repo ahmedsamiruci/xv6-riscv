@@ -109,6 +109,9 @@ void            procdump(void);
 // swtch.S
 void            swtch(struct context*, struct context*);
 
+// start.c
+int             inter(int);
+
 // spinlock.c
 void            acquire(struct spinlock*);
 int             holding(struct spinlock*);

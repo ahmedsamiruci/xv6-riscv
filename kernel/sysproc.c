@@ -91,6 +91,17 @@ sys_kill(void)
   return kill(pid);
 }
 
+
+uint64
+sys_inter(void)
+{
+  int interval;
+
+  if(argint(0, &interval) < 0)
+    return -1;
+  return inter(interval);
+}
+
 // return how many clock tick interrupts have occurred
 // since start.
 uint64

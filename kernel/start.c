@@ -65,7 +65,7 @@ timerinit()
   int id = r_mhartid();
 
   // ask the CLINT for a timer interrupt.
-  int interval = 1000000; // cycles; about 1/10th second in qemu.
+  int interval = 1000000; // cycles; about 1/10th second in qemu. [1000000]
   *(uint64*)CLINT_MTIMECMP(id) = *(uint64*)CLINT_MTIME + interval;
 
   // prepare information in scratch[] for timervec.
@@ -85,4 +85,22 @@ timerinit()
 
   // enable machine-mode timer interrupts.
   w_mie(r_mie() | MIE_MTIE);
+}
+
+
+// funtion to change the scheduler interval
+// using new syscall "inter"
+int
+inter(int interval)
+{
+  printf("syscall [inter] called with interval = %d\n", interval);
+
+  // each CPU has a separate source of timer interrupts.
+  //int id = r_mhartid();
+
+  // change the scratch memory pointed by mscratch at initialization
+  //uint64 *scratch = &timer_scratch[id][0];
+  //scratch[4] = interval;
+
+  return 0;
 }
