@@ -38,3 +38,4 @@ entry("sleep");
 entry("uptime");
 entry("pcb");
 entry("inter");
+entry("ptick");

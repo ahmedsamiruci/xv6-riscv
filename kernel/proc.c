@@ -119,6 +119,7 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->cticks = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -439,6 +440,7 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
+  int ptick;
   
   c->proc = 0;
  // int count = 0;
@@ -459,7 +461,13 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        // capture the current ticks value
+        ptick = ticks;
+
         swtch(&c->context, &p->context);
+
+        // set the consumed ticks by the current process
+        p->cticks += (ticks - ptick);
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.

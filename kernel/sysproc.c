@@ -24,6 +24,13 @@ sys_getpid(void)
 }
 
 uint64
+sys_ptick(void)
+{
+  //printf("proc id = %d, cticks = %d\n", myproc()->pid, myproc()->cticks);
+  return myproc()->cticks;
+}
+
+uint64
 sys_fork(void)
 {
   return fork();

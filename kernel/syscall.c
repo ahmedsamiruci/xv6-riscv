@@ -106,6 +106,7 @@ extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
 extern uint64 sys_pcb(void);
 extern uint64 sys_inter(void);
+extern uint64 sys_ptick(void);
 
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -131,6 +132,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_close]   sys_close,
 [SYS_pcb]     sys_pcb,
 [SYS_inter]   sys_inter,
+[SYS_ptick]   sys_ptick,
 };
 
 void

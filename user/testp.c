@@ -21,6 +21,7 @@ main(int argc, char *argv[])
     int donetime = uptime();
 
     printf("[Process-%d] done with calculations, with %d ticks!\n", getpid(), donetime - starttime);
+    printf("[Process-%d] done with calculations, scheduler %d ticks!\n", getpid(), ptick());
  
   exit(0);
 }
