@@ -136,7 +136,11 @@ UPROGS=\
 	$U/_test\
 	$U/_testinter\
 	$U/_testw\
-	$U/_testp\
+	$U/_test2\
+	$U/_test3\
+	$U/_test4\
+	$U/_test5\
+	$U/_test6\
 
 
 fs.img: mkfs/mkfs README $(UPROGS)

@@ -120,6 +120,7 @@ found:
   p->pid = allocpid();
   p->state = USED;
   p->rticks = 0;
+  p->burst = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -653,6 +654,7 @@ procdump(void)
   char *state;
 
   printf("\n");
+  printf("[pid]\tstate\t[name]\t[burst]\t[rticks]\n");
   for(p = proc; p < &proc[NPROC]; p++){
     if(p->state == UNUSED)
       continue;
@@ -661,7 +663,7 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    printf("%d %s %s\t%d", p->pid, state, p->name, p->rticks);
+    printf("%d\t%s\t%s\t%d\t%d", p->pid, state, p->name, p->burst,p->rticks);
     printf("\n");
   }
 }

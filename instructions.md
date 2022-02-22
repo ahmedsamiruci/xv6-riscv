@@ -33,7 +33,23 @@
 make qemu | ts '[%H:%M:%.S]' | tee -a ./testtime.txt
 
 // create/replace file
-make qemu | ts '[%H:%M:%.S]' | tee ./testtime.txt
+make qemu | ts '[%H:%M:%.S]' | tee ./testtime2.txt
 
 
-make qemu | tee -a ./testtime.txt | ts '[%H:%M:%.S]'
+
+test2 &;test3 &;test4 &;test5 &;test6 &;
+
+
+
+53      run     pcb     0       0
+52      runble  test6   0       3
+45      runble  test2   36      7
+47      runble  test3   0       6
+49      runble  test4   0       5
+51      runble  test5   0       4
+
+test4 = 21 ticks
+test2 = 36 ticks
+test3 = 64 ticks
+test6 = 94 ticks
+test5 = 121 ticks
