@@ -38,35 +38,29 @@ main(int argc, char *argv[])
     }
     else if (pid > 0){ // parent process
       printf("[Parent-%d] creating child process -> {%d}\n", getpid(), pid);
-      int starttime = uptime();
       for(y=0; y < 80000000; y+=s)
       {
         x = x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
       }
-      int donetime = uptime();
 
-      printf("[Parent-%d] done with calculations, with %d ticks!\n", getpid(), donetime - starttime);
+      printf("[Parent-%d] done with calculations, with %d ticks!\n", getpid(), ptick());
       pcb();
       printf("[Parent-%d] enter waiting state....\n", getpid());
       wait(0);
     } 
     else{ // child process
       printf("[child-%d] child process created\n", getpid());
-      int starttime = uptime();
       for(y=0; y < 80000000; y+=s)
       {
         x = x + (356 * 34.1) * (356.86 * 356)/ 7149.08;
         x2 = x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
       }
-      int donetime = uptime();
-
-      printf("[child-%d] done with Calculations, with %d ticks!\n", getpid(), donetime - starttime);
+      printf("[child-%d] done with Calculations, with %d ticks!\n", getpid(), ptick());
       break; // break the child loop to go to parent
     }
 
   }
-  printf("print pcb then exit process {%d}!!\n", getpid());
-  pcb();
+  printf("[exit-proc{%d}] total ticks = %d\n", getpid(), ptick());
 
   exit(0);
 }

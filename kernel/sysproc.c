@@ -26,8 +26,8 @@ sys_getpid(void)
 uint64
 sys_ptick(void)
 {
-  //printf("proc id = %d, cticks = %d\n", myproc()->pid, myproc()->cticks);
-  return myproc()->cticks;
+  //printf("proc id = %d, rticks = %d\n", myproc()->pid, myproc()->rticks);
+  return myproc()->rticks;
 }
 
 uint64

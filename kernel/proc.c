@@ -119,7 +119,7 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
-  p->cticks = 0;
+  p->rticks = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -165,6 +165,7 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->rticks = 0;
 }
 
 // Create a user page table for a given process,
@@ -447,12 +448,7 @@ scheduler(void)
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
-/*    
-    if (count++ > 1000){
-      printf(".");
-      count = 0;
-    }
-*/
+
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
@@ -467,7 +463,7 @@ scheduler(void)
         swtch(&c->context, &p->context);
 
         // set the consumed ticks by the current process
-        p->cticks += (ticks - ptick);
+        p->rticks += (ticks - ptick);
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
@@ -660,11 +656,12 @@ procdump(void)
   for(p = proc; p < &proc[NPROC]; p++){
     if(p->state == UNUSED)
       continue;
+    
     if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
       state = states[p->state];
     else
       state = "???";
-    printf("%d %s %s", p->pid, state, p->name);
+    printf("%d %s %s\t%d", p->pid, state, p->name, p->rticks);
     printf("\n");
   }
 }
