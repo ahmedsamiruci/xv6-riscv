@@ -120,6 +120,8 @@ found:
   p->pid = allocpid();
   p->state = USED;
   p->rticks = 0;
+  p->lticks = ticks;
+  p->wticks = 0;
   p->burst = 0;
 
   // Allocate a trapframe page.
@@ -143,6 +145,7 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  printf("[pid-%d] init ticks = %d\n", p->pid, p->lticks);
   return p;
 }
 
@@ -167,6 +170,8 @@ freeproc(struct proc *p)
   p->xstate = 0;
   p->state = UNUSED;
   p->rticks = 0;
+  p->lticks = 0;
+  p->wticks = 0;
 }
 
 // Create a user page table for a given process,
@@ -430,6 +435,26 @@ wait(uint64 addr)
   }
 }
 
+
+void
+updatewait(void)
+{
+  struct proc *p;
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state == RUNNABLE){
+      //calculate the waiting time
+      p->wticks += ticks - p->lticks;
+      p->lticks = ticks;
+      //printf("update [pid-%d] with ticks (%d), wticks=%d\n", p->pid, (ticks - p->lticks), p->wticks);
+    }
+    release(&p->lock);
+  }
+
+}
+
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -449,6 +474,9 @@ scheduler(void)
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
+    
+    //update wait ticks for all ready processes
+    updatewait();
 
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
@@ -654,7 +682,7 @@ procdump(void)
   char *state;
 
   printf("\n");
-  printf("[pid]\tstate\t[name]\t[burst]\t[rticks]\n");
+  printf("[pid]\tstate\t[name]\t[burst]\t[rticks]\t[wticks]\n");
   for(p = proc; p < &proc[NPROC]; p++){
     if(p->state == UNUSED)
       continue;
@@ -663,9 +691,10 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    printf("%d\t%s\t%s\t%d\t%d", p->pid, state, p->name, p->burst,p->rticks);
+    printf("%d\t%s\t%s\t%d\t%d\t%d", p->pid, state, p->name, p->burst,p->rticks,p->wticks);
     printf("\n");
   }
+  printf("\n");
 }
 
 int

@@ -15,6 +15,7 @@ main(int argc, char *argv[])
     x = x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
     x2 = x;
   }
-  printf("[Process-%d] done with calculations, scheduler %d ticks!\n", getpid(), ptick());
+  printf("[Process-%d] done. scheduler %d ticks!\n", getpid(), ptick());
+  pcb();
   exit(0);
 }
