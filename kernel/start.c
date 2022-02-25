@@ -94,7 +94,8 @@ int
 inter(int interval)
 {
   intr_off();
-  printf("syscall [inter] called with interval = %d\n", interval);
+  long inter = interval * 1000;
+  //printf("syscall [inter] called with interval = %d\n", inter);
   
   // each CPU has a separate source of timer interrupts.
   //int id = r_mhartid();
@@ -102,7 +103,8 @@ inter(int interval)
   // change the scratch memory pointed by mscratch at initialization
   uint64 *scratch = &timer_scratch[0][0];
   printf("scratch[4]; {0x%x}\n", scratch[4]);
-  scratch[4] = interval;
+  scratch[4] = inter;
+  printf("syscall [inter] called with interval = {0x%x}\n", inter);
 
   //printf("timer int REG mie {0x%x}\n", r_mie());
   //printf("timer r_mstatus(): {0x%x}\n", r_mstatus());

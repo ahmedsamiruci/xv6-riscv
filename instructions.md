@@ -33,7 +33,7 @@
 make qemu | ts '[%H:%M:%.S]' | tee -a ./testtime.txt
 
 // create/replace file
-make qemu | ts '[%H:%M:%.S]' | tee ./testtime2.txt
+make qemu | ts '[%H:%M:%.S]' | tee ./testtime.txt
 
 
 

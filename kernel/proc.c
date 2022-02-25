@@ -121,6 +121,7 @@ found:
   p->state = USED;
   p->rticks = 0;
   p->lticks = ticks;
+  p->tticks = 0;
   p->wticks = 0;
   p->burst = 0;
 
@@ -171,6 +172,7 @@ freeproc(struct proc *p)
   p->state = UNUSED;
   p->rticks = 0;
   p->lticks = 0;
+  p->tticks = 0;
   p->wticks = 0;
 }
 
@@ -444,10 +446,11 @@ updatewait(void)
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
     if(p->state == RUNNABLE){
-      //calculate the waiting time
-      p->wticks += ticks - p->lticks;
+      //calculate the waiting time and total ticks
+      p->tticks += ticks - p->lticks;
+      p->wticks = p->tticks - p->rticks;
       p->lticks = ticks;
-      //printf("update [pid-%d] with ticks (%d), wticks=%d\n", p->pid, (ticks - p->lticks), p->wticks);
+      //printf("update [pid-%d] with ticks (%d), tticks=%d\n", p->pid, (ticks - p->lticks), p->tticks);
     }
     release(&p->lock);
   }
@@ -477,6 +480,8 @@ scheduler(void)
     
     //update wait ticks for all ready processes
     updatewait();
+
+    //printf(".");
 
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
@@ -682,7 +687,7 @@ procdump(void)
   char *state;
 
   printf("\n");
-  printf("[pid]\tstate\t[name]\t[burst]\t[rticks]\t[wticks]\n");
+  printf("[pid]\tstate\t[name]\t[burst]\t[rticks]\t[wticks]\t[tticks]\n");
   for(p = proc; p < &proc[NPROC]; p++){
     if(p->state == UNUSED)
       continue;
@@ -691,10 +696,10 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    printf("%d\t%s\t%s\t%d\t%d\t%d", p->pid, state, p->name, p->burst,p->rticks,p->wticks);
+    printf("%d\t%s\t%s\t%d\t%d\t%d\t%d", p->pid, state, p->name, p->burst,p->rticks,p->wticks,p->tticks);
     printf("\n");
   }
-  printf("\n");
+  printf("/n");
 }
 
 int

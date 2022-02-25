@@ -93,6 +93,7 @@ struct proc {
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
   int rticks;                  // process run time in the cpu
+  int tticks;                  // total ticks
   int wticks;                  // waiting ticks
   int lticks;                  // last captured ticks
   int burst;                   // burst value of the process

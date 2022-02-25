@@ -7,18 +7,19 @@
 int
 main(int argc, char *argv[])
 {
-  printf("\n --> start test6 <--\n");
+  printf("[Process-%d]--> start test6 <--\n",getpid());
   volatile unsigned int y,x,x2;
   
-  for(y=0; y < 60000000; y++)
+  for(y=0; y < 9000; y++)
   {
     x = x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
     x = x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
     x2 =  x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
     x2 =  x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
     x2 = x;
+    printf("6666");
   }
-  printf("[Process-%d] done. scheduler %d ticks!\n", getpid(), ptick());
+  printf("\n[Process-%d] done. scheduler %d ticks!\n", getpid(), ptick());
   pcb();
   exit(0);
 }
