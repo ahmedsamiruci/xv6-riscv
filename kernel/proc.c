@@ -6,11 +6,28 @@
 #include "proc.h"
 #include "defs.h"
 
+#define ADAPTIVE_RR
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
 
 struct proc *initproc;
+
+#ifdef ADAPTIVE_RR
+
+struct proc* rqueue[NPROC];     // Array of ready processes pointers
+int rqueue_len = 0;
+
+void sort_rqueue(void);
+int rr_adaptive_val(void);
+int r_rqueue(struct proc*);
+int a_rqueue(struct proc*);
+void p_rqueue(void);
+//testing
+static struct proc test[5];
+void init_test(void);
+#endif
 
 int nextpid = 1;
 struct spinlock pid_lock;
@@ -54,6 +71,10 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->kstack = KSTACK((int) (p - proc));
   }
+  for(int i=0; i<NPROC; i++){
+    rqueue[i] = 0;
+  }
+  //init_test();
 }
 
 // Must be called with interrupts disabled,
@@ -254,6 +275,10 @@ userinit(void)
 
   p->state = RUNNABLE;
 
+#ifdef ADAPTIVE_RR
+  a_rqueue(p);
+#endif
+
   release(&p->lock);
 }
 
@@ -323,6 +348,9 @@ fork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+#ifdef ADAPTIVE_RR
+  a_rqueue(p);
+#endif
   release(&np->lock);
 
   return pid;
@@ -380,6 +408,9 @@ exit(int status)
 
   p->xstate = status;
   p->state = ZOMBIE;
+#ifdef ADAPTIVE_RR
+  r_rqueue(p);
+#endif
 
   release(&wait_lock);
 
@@ -470,6 +501,7 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
+  int rr_timer = 0;
   int ptick;
   
   c->proc = 0;
@@ -481,15 +513,26 @@ scheduler(void)
     //update wait ticks for all ready processes
     updatewait();
 
-    //printf(".");
+#ifdef ADAPTIVE_RR
+    rr_timer = rr_adaptive_val();
+    if(rr_timer != getinter())
+    {
+      inter(rr_timer);
+    }
+#endif
 
-    for(p = proc; p < &proc[NPROC]; p++) {
+
+    for(p = proc; p < &proc[NPROC]; p++) 
+    {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
         p->state = RUNNING;
+#ifdef ADAPTIVE_RR
+        r_rqueue(p);
+#endif        
         c->proc = p;
         // capture the current ticks value
         ptick = ticks;
@@ -542,6 +585,9 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
+#ifdef ADAPTIVE_RR
+  a_rqueue(p);
+#endif
   sched();
   release(&p->lock);
 }
@@ -587,6 +633,9 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+#ifdef ADAPTIVE_RR
+  r_rqueue(p);
+#endif
 
   sched();
 
@@ -610,6 +659,9 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+#ifdef ADAPTIVE_RR
+        a_rqueue(p);
+#endif
       }
       release(&p->lock);
     }
@@ -631,6 +683,9 @@ kill(int pid)
       if(p->state == SLEEPING){
         // Wake process from sleep().
         p->state = RUNNABLE;
+#ifdef ADAPTIVE_RR
+        a_rqueue(p);
+#endif
       }
       release(&p->lock);
       return 0;
@@ -670,21 +725,32 @@ either_copyin(void *dst, int user_src, uint64 src, uint64 len)
   }
 }
 
-// Print a process listing to console.  For debugging.
-// Runs when user types ^P on console.
-// No lock to avoid wedging a stuck machine further.
-void
-procdump(void)
-{
-  static char *states[] = {
+static char *states[] = {
   [UNUSED]    "unused",
   [SLEEPING]  "sleep ",
   [RUNNABLE]  "runble",
   [RUNNING]   "run   ",
   [ZOMBIE]    "zombie"
   };
-  struct proc *p;
+static char unkonw[] = "???";
+
+char* 
+printable_state(enum procstate pstate){
   char *state;
+  if(pstate >= 0 && pstate < NELEM(states) && states[pstate])
+      state = states[pstate];
+    else
+      state = unkonw;
+  
+  return state;
+}
+// Print a process listing to console.  For debugging.
+// Runs when user types ^P on console.
+// No lock to avoid wedging a stuck machine further.
+void
+procdump(void)
+{
+  struct proc *p;
 
   printf("\n");
   printf("[pid]\tstate\t[name]\t[burst]\t[rticks]\t[wticks]\t[tticks]\n");
@@ -692,14 +758,14 @@ procdump(void)
     if(p->state == UNUSED)
       continue;
     
-    if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
-      state = states[p->state];
-    else
-      state = "???";
-    printf("%d\t%s\t%s\t%d\t%d\t%d\t%d", p->pid, state, p->name, p->burst,p->rticks,p->wticks,p->tticks);
+    printf("%d\t%s\t%s\t%d\t%d\t%d\t%d", p->pid, printable_state(p->state), p->name, p->burst,p->rticks,p->wticks,p->tticks);
     printf("\n");
   }
-  printf("/n");
+  printf("\n");
+
+#ifdef ADAPTIVE_RR
+  p_rqueue();
+#endif
 }
 
 int
@@ -707,3 +773,156 @@ pcb(void){
   procdump();
   return 1;
 }
+
+#ifdef ADAPTIVE_RR
+
+void p_rqueue(void){
+  printf("Q[%d]: ",rqueue_len);
+  for(int i=0; i<rqueue_len; i++){
+    printf("[P-%d], ",rqueue[i]->pid);
+  }
+  printf("\n");
+}
+
+
+void init_test(void)
+{
+  test[0].burst = 15;
+  test[0].state = RUNNABLE;
+  test[1].burst = 5;
+  test[1].state = RUNNABLE;
+  test[2].burst = 20;
+  test[2].state = RUNNABLE;
+  test[3].burst = 1;
+  test[4].burst = 9;
+  
+  a_rqueue(&test[0]);
+  a_rqueue(&test[1]);
+  a_rqueue(&test[2]);
+  
+/*  printf("init rqueue: ");
+  int i;
+  for(i=0; i<NPROC; i++){
+    printf("rqueue[%d]=[%d], ",i,rqueue[i]->burst);
+  }
+  printf("\n");*/
+}
+
+int
+r_rqueue(struct proc* p)
+{
+  if (rqueue_len > 0)
+  {
+    for (int i = 0; i < rqueue_len; i++)
+    {
+      if (rqueue[i] == p)
+      {
+        // remove the process by replacing it with the last one and decrement the queue len
+        rqueue[i] = rqueue[rqueue_len-1];
+        rqueue_len--;
+        printf("[pid-%d] Removed ... ", p->pid);
+        p_rqueue();
+        return 0;
+      }
+    }
+    //printf("remove failed, couldn't find [pid-%d]\n", p->pid);
+  }
+  /*else{
+    printf("remove failed, Empty Queue\n");
+  }*/
+  return -1;
+}
+
+int
+a_rqueue(struct proc* p){
+  if (p->state == RUNNABLE && p->burst > 0)
+  {
+    if(rqueue_len < NPROC)
+    {
+      rqueue[rqueue_len] = p;
+      rqueue_len++;
+      printf("[pid=%d] Added ... ",p->pid);
+      p_rqueue();
+      return 0;
+    }
+  }
+  /*else{
+    printf("Add failed, [pid-%d] state = %s\n", p->pid, printable_state(p->state));
+  }*/
+  
+  return -1;
+}
+/*
+  The function sorts the ready queue based on the tasks burst time
+*/
+void sort_rqueue()
+{
+  int i, j;
+  struct proc *element;
+  if (rqueue_len > 0)
+  {
+   /* printf("array before sorting: ");
+    for (i = 0; i < rqueue_len; i++)
+    {
+      printf("rqueue[%d]=[%d], ", i, rqueue[i]->burst);
+    }
+    printf("\n");
+*/
+    for (i = 1; i < rqueue_len; i++)
+    {
+      element = rqueue[i];
+
+      j = i - 1;
+      while (j >= 0 && rqueue[j]->burst > element->burst)
+      {
+        rqueue[j + 1] = rqueue[j];
+        j = j - 1;
+      }
+      rqueue[j + 1] = element;
+    }
+
+    printf("array after sorting: ");
+    for (i = 0; i < rqueue_len; i++)
+    {
+      printf("rqueue[%d]=[%d], ", i, rqueue[i]->burst);
+    }
+    printf("\n");
+    
+  }
+}
+
+/* Get the scheduler value */
+int rr_adaptive_val(void)
+{
+  int rr_adap_val = 0;
+  if (rqueue_len > 0)
+  {
+    /* To get RR adaptive value the ready queue MUST be sorted first */
+    sort_rqueue();
+
+    /* If number of tasks even, the Adaptive RR is the Avg */
+    if (rqueue_len % 2 == 0)
+    {
+      for (int i = 0; i < rqueue_len; i++)
+      {
+        rr_adap_val += rqueue[i]->burst;
+      }
+      rr_adap_val = (int)rr_adap_val / rqueue_len;
+      printf("---> RR Adaptive (AVG) = %d\n", rr_adap_val);
+    }
+    /* when tasks are odd no, the Adaptive RR is the median */
+    else
+    {
+      rr_adap_val = rqueue[rqueue_len / 2]->burst;
+      printf("---> RR Adaptive (MID) = %d\n", rr_adap_val);
+    }
+  }
+  else
+  {
+    /* Default RR value */
+    rr_adap_val = 1000;
+  }
+  return rr_adap_val;
+}
+
+#endif

@@ -14,23 +14,23 @@ void
 setbrust(struct proc * p)
 {
   if(strncmp(p->name, "test2", strlen(p->name))==0){
-    p->burst = 36;
+    p->burst = 11000;
     return;
   }
   if(strncmp(p->name, "test3", strlen(p->name))==0){
-    p->burst = 64;
+    p->burst = 27000;
     return;
   } 
   if(strncmp(p->name, "test4", strlen(p->name))==0){
-    p->burst = 21;
+    p->burst = 39000;
     return;
   } 
   if(strncmp(p->name, "test6", strlen(p->name))==0){
-    p->burst = 94;
+    p->burst = 52000;
     return;
   } 
   if(strncmp(p->name, "test5", strlen(p->name))==0){
-    p->burst = 121;
+    p->burst = 78000;
     return;
   } 
 }

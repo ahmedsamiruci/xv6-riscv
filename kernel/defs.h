@@ -111,6 +111,7 @@ void            swtch(struct context*, struct context*);
 
 // start.c
 int             inter(int);
+uint64          getinter(void);
 
 // spinlock.c
 void            acquire(struct spinlock*);

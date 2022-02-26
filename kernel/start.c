@@ -102,7 +102,7 @@ inter(int interval)
 
   // change the scratch memory pointed by mscratch at initialization
   uint64 *scratch = &timer_scratch[0][0];
-  printf("scratch[4]; {0x%x}\n", scratch[4]);
+  //printf("scratch[4]; {0x%x}\n", scratch[4]);
   scratch[4] = inter;
   printf("syscall [inter] called with interval = {0x%x}\n", inter);
 
@@ -112,4 +112,10 @@ inter(int interval)
   intr_on();
 
   return 0;
+}
+
+uint64 getinter(void)
+{
+  uint64 *scratch = &timer_scratch[0][0];
+  return scratch[4]/1000;
 }
