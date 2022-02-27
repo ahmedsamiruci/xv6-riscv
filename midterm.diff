@@ -1,0 +1,985 @@
+diff --git a/.DS_Store b/.DS_Store
+new file mode 100644
+index 0000000..b7b4269
+Binary files /dev/null and b/.DS_Store differ
+diff --git a/Makefile b/Makefile
+index 6a461ad..2a23d01 100644
+--- a/Makefile
++++ b/Makefile
+@@ -63,6 +63,8 @@ CFLAGS += -ffreestanding -fno-common -nostdlib -mno-relax
+ CFLAGS += -I.
+ CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
+ 
++#CFLAGS += -DADAPTIVE_RR
++
+ # Disable PIE when possible (for Ubuntu 16.10 toolchain)
+ ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]no-pie'),)
+ CFLAGS += -fno-pie -no-pie
+@@ -133,13 +135,14 @@ UPROGS=\
+ 	$U/_wc\
+ 	$U/_zombie\
+ 	$U/_pcb\
+-
+-#reduced version of user processes
+-#UPROGS=\
+-	$U/_init\
+-	$U/_kill\
+-	$U/_ls\
+-	$U/_sh\
++	$U/_test\
++	$U/_testinter\
++	$U/_testw\
++	$U/_test2\
++	$U/_test3\
++	$U/_test4\
++	$U/_test5\
++	$U/_test6\
+ 
+ 
+ fs.img: mkfs/mkfs README $(UPROGS)
+diff --git a/kernel/defs.h b/kernel/defs.h
+index 2ebc20d..cffc383 100644
+--- a/kernel/defs.h
++++ b/kernel/defs.h
+@@ -109,6 +109,10 @@ void            procdump(void);
+ // swtch.S
+ void            swtch(struct context*, struct context*);
+ 
++// start.c
++int             inter(int);
++uint64          getinter(void);
++
+ // spinlock.c
+ void            acquire(struct spinlock*);
+ int             holding(struct spinlock*);
+diff --git a/kernel/exec.c b/kernel/exec.c
+index d62d29d..16b803f 100644
+--- a/kernel/exec.c
++++ b/kernel/exec.c
+@@ -7,8 +7,34 @@
+ #include "defs.h"
+ #include "elf.h"
+ 
++
+ static int loadseg(pde_t *pgdir, uint64 addr, struct inode *ip, uint offset, uint sz);
+ 
++void
++setburst(struct proc * p)
++{
++  if(strncmp(p->name, "test2", strlen(p->name))==0){
++    p->burst = 11000;
++    return;
++  }
++  if(strncmp(p->name, "test3", strlen(p->name))==0){
++    p->burst = 27000;
++    return;
++  } 
++  if(strncmp(p->name, "test4", strlen(p->name))==0){
++    p->burst = 39000;
++    return;
++  } 
++  if(strncmp(p->name, "test6", strlen(p->name))==0){
++    p->burst = 52000;
++    return;
++  } 
++  if(strncmp(p->name, "test5", strlen(p->name))==0){
++    p->burst = 78000;
++    return;
++  } 
++}
++
+ int
+ exec(char *path, char **argv)
+ {
+@@ -107,7 +133,7 @@ exec(char *path, char **argv)
+     if(*s == '/')
+       last = s+1;
+   safestrcpy(p->name, last, sizeof(p->name));
+-    
++
+   // Commit to the user image.
+   oldpagetable = p->pagetable;
+   p->pagetable = pagetable;
+@@ -116,6 +142,9 @@ exec(char *path, char **argv)
+   p->trapframe->sp = sp; // initial stack pointer
+   proc_freepagetable(oldpagetable, oldsz);
+ 
++  //set the burst of each testing process
++  setburst(p);
++
+   return argc; // this ends up in a0, the first argument to main(argc, argv)
+ 
+  bad:
+diff --git a/kernel/proc.c b/kernel/proc.c
+index 55b2dcc..499c72d 100644
+--- a/kernel/proc.c
++++ b/kernel/proc.c
+@@ -6,12 +6,29 @@
+ #include "proc.h"
+ #include "defs.h"
+ 
++#define ADAPTIVE_RR
++
+ struct cpu cpus[NCPU];
+ 
+ struct proc proc[NPROC];
+ 
+ struct proc *initproc;
+ 
++#ifdef ADAPTIVE_RR
++
++struct proc* rqueue[NPROC];     // Array of ready processes pointers
++int rqueue_len = 0;
++
++void sort_rqueue(void);
++int rr_adaptive_val(void);
++int r_rqueue(struct proc*);
++int a_rqueue(struct proc*);
++void p_rqueue(void);
++//testing
++static struct proc test[5];
++void init_test(void);
++#endif
++
+ int nextpid = 1;
+ struct spinlock pid_lock;
+ 
+@@ -54,6 +71,10 @@ procinit(void)
+       initlock(&p->lock, "proc");
+       p->kstack = KSTACK((int) (p - proc));
+   }
++  for(int i=0; i<NPROC; i++){
++    rqueue[i] = 0;
++  }
++  //init_test();
+ }
+ 
+ // Must be called with interrupts disabled,
+@@ -119,6 +140,11 @@ allocproc(void)
+ found:
+   p->pid = allocpid();
+   p->state = USED;
++  p->rticks = 0;
++  p->lticks = ticks;
++  p->tticks = 0;
++  p->wticks = 0;
++  p->burst = 0;
+ 
+   // Allocate a trapframe page.
+   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
+@@ -141,6 +167,7 @@ found:
+   p->context.ra = (uint64)forkret;
+   p->context.sp = p->kstack + PGSIZE;
+ 
++  printf("[pid-%d] init ticks = %d\n", p->pid, p->lticks);
+   return p;
+ }
+ 
+@@ -164,6 +191,10 @@ freeproc(struct proc *p)
+   p->killed = 0;
+   p->xstate = 0;
+   p->state = UNUSED;
++  p->rticks = 0;
++  p->lticks = 0;
++  p->tticks = 0;
++  p->wticks = 0;
+ }
+ 
+ // Create a user page table for a given process,
+@@ -244,6 +275,10 @@ userinit(void)
+ 
+   p->state = RUNNABLE;
+ 
++#ifdef ADAPTIVE_RR
++  a_rqueue(p);
++#endif
++
+   release(&p->lock);
+ }
+ 
+@@ -313,6 +348,9 @@ fork(void)
+ 
+   acquire(&np->lock);
+   np->state = RUNNABLE;
++#ifdef ADAPTIVE_RR
++  a_rqueue(p);
++#endif
+   release(&np->lock);
+ 
+   return pid;
+@@ -370,6 +408,9 @@ exit(int status)
+ 
+   p->xstate = status;
+   p->state = ZOMBIE;
++#ifdef ADAPTIVE_RR
++  r_rqueue(p);
++#endif
+ 
+   release(&wait_lock);
+ 
+@@ -427,6 +468,27 @@ wait(uint64 addr)
+   }
+ }
+ 
++
++void
++updatewait(void)
++{
++  struct proc *p;
++
++  for(p = proc; p < &proc[NPROC]; p++) {
++    acquire(&p->lock);
++    if(p->state == RUNNABLE){
++      //calculate the waiting time and total ticks
++      p->tticks += ticks - p->lticks;
++      p->wticks = p->tticks - p->rticks;
++      p->lticks = ticks;
++      //printf("update [pid-%d] with ticks (%d), tticks=%d\n", p->pid, (ticks - p->lticks), p->tticks);
++    }
++    release(&p->lock);
++  }
++
++}
++
++
+ // Per-CPU process scheduler.
+ // Each CPU calls scheduler() after setting itself up.
+ // Scheduler never returns.  It loops, doing:
+@@ -439,28 +501,47 @@ scheduler(void)
+ {
+   struct proc *p;
+   struct cpu *c = mycpu();
++  int rr_timer = 0;
++  int ptick;
+   
+   c->proc = 0;
+  // int count = 0;
+   for(;;){
+     // Avoid deadlock by ensuring that devices can interrupt.
+     intr_on();
+-/*    
+-    if (count++ > 1000){
+-      printf(".");
+-      count = 0;
++    
++    //update wait ticks for all ready processes
++    updatewait();
++
++#ifdef ADAPTIVE_RR
++    rr_timer = rr_adaptive_val();
++    if(rr_timer != getinter())
++    {
++      inter(rr_timer);
+     }
+-*/
+-    for(p = proc; p < &proc[NPROC]; p++) {
++#endif
++
++
++    for(p = proc; p < &proc[NPROC]; p++) 
++    {
+       acquire(&p->lock);
+       if(p->state == RUNNABLE) {
+         // Switch to chosen process.  It is the process's job
+         // to release its lock and then reacquire it
+         // before jumping back to us.
+         p->state = RUNNING;
++#ifdef ADAPTIVE_RR
++        r_rqueue(p);
++#endif        
+         c->proc = p;
++        // capture the current ticks value
++        ptick = ticks;
++
+         swtch(&c->context, &p->context);
+ 
++        // set the consumed ticks by the current process
++        p->rticks += (ticks - ptick);
++
+         // Process is done running for now.
+         // It should have changed its p->state before coming back.
+         c->proc = 0;
+@@ -504,6 +585,9 @@ yield(void)
+   struct proc *p = myproc();
+   acquire(&p->lock);
+   p->state = RUNNABLE;
++#ifdef ADAPTIVE_RR
++  a_rqueue(p);
++#endif
+   sched();
+   release(&p->lock);
+ }
+@@ -549,6 +633,9 @@ sleep(void *chan, struct spinlock *lk)
+   // Go to sleep.
+   p->chan = chan;
+   p->state = SLEEPING;
++#ifdef ADAPTIVE_RR
++  r_rqueue(p);
++#endif
+ 
+   sched();
+ 
+@@ -572,6 +659,9 @@ wakeup(void *chan)
+       acquire(&p->lock);
+       if(p->state == SLEEPING && p->chan == chan) {
+         p->state = RUNNABLE;
++#ifdef ADAPTIVE_RR
++        a_rqueue(p);
++#endif
+       }
+       release(&p->lock);
+     }
+@@ -593,6 +683,9 @@ kill(int pid)
+       if(p->state == SLEEPING){
+         // Wake process from sleep().
+         p->state = RUNNABLE;
++#ifdef ADAPTIVE_RR
++        a_rqueue(p);
++#endif
+       }
+       release(&p->lock);
+       return 0;
+@@ -632,37 +725,204 @@ either_copyin(void *dst, int user_src, uint64 src, uint64 len)
+   }
+ }
+ 
+-// Print a process listing to console.  For debugging.
+-// Runs when user types ^P on console.
+-// No lock to avoid wedging a stuck machine further.
+-void
+-procdump(void)
+-{
+-  static char *states[] = {
++static char *states[] = {
+   [UNUSED]    "unused",
+   [SLEEPING]  "sleep ",
+   [RUNNABLE]  "runble",
+   [RUNNING]   "run   ",
+   [ZOMBIE]    "zombie"
+   };
+-  struct proc *p;
++static char unkonw[] = "???";
++
++char* 
++printable_state(enum procstate pstate){
+   char *state;
++  if(pstate >= 0 && pstate < NELEM(states) && states[pstate])
++      state = states[pstate];
++    else
++      state = unkonw;
++  
++  return state;
++}
++// Print a process listing to console.  For debugging.
++// Runs when user types ^P on console.
++// No lock to avoid wedging a stuck machine further.
++void
++procdump(void)
++{
++  struct proc *p;
+ 
+   printf("\n");
++  printf("[pid]\tstate\t[name]\t[burst]\t[rticks]\t[wticks]\t[tticks]\n");
+   for(p = proc; p < &proc[NPROC]; p++){
+     if(p->state == UNUSED)
+       continue;
+-    if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
+-      state = states[p->state];
+-    else
+-      state = "???";
+-    printf("%d %s %s", p->pid, state, p->name);
++    
++    printf("%d\t%s\t%s\t%d\t%d\t%d\t%d", p->pid, printable_state(p->state), p->name, p->burst,p->rticks,p->wticks,p->tticks);
+     printf("\n");
+   }
++  printf("\n");
++
++#ifdef ADAPTIVE_RR
++  p_rqueue();
++#endif
+ }
+ 
+ int
+ pcb(void){
+   procdump();
+   return 1;
+-}
+\ No newline at end of file
++}
++
++#ifdef ADAPTIVE_RR
++
++void p_rqueue(void){
++  printf("Q[%d]: ",rqueue_len);
++  for(int i=0; i<rqueue_len; i++){
++    printf("[P-%d], ",rqueue[i]->pid);
++  }
++  printf("\n");
++}
++
++
++void init_test(void)
++{
++  test[0].burst = 15;
++  test[0].state = RUNNABLE;
++  test[1].burst = 5;
++  test[1].state = RUNNABLE;
++  test[2].burst = 20;
++  test[2].state = RUNNABLE;
++  test[3].burst = 1;
++  test[4].burst = 9;
++  
++  a_rqueue(&test[0]);
++  a_rqueue(&test[1]);
++  a_rqueue(&test[2]);
++  
++/*  printf("init rqueue: ");
++  int i;
++  for(i=0; i<NPROC; i++){
++    printf("rqueue[%d]=[%d], ",i,rqueue[i]->burst);
++  }
++  printf("\n");*/
++}
++
++int
++r_rqueue(struct proc* p)
++{
++  if (rqueue_len > 0)
++  {
++    for (int i = 0; i < rqueue_len; i++)
++    {
++      if (rqueue[i] == p)
++      {
++        // remove the process by replacing it with the last one and decrement the queue len
++        rqueue[i] = rqueue[rqueue_len-1];
++        rqueue_len--;
++        printf("[pid-%d] Removed ... ", p->pid);
++        p_rqueue();
++        return 0;
++      }
++    }
++    //printf("remove failed, couldn't find [pid-%d]\n", p->pid);
++  }
++  /*else{
++    printf("remove failed, Empty Queue\n");
++  }*/
++  return -1;
++}
++
++int
++a_rqueue(struct proc* p){
++  if (p->state == RUNNABLE && p->burst > 0)
++  {
++    if(rqueue_len < NPROC)
++    {
++      rqueue[rqueue_len] = p;
++      rqueue_len++;
++      printf("[pid=%d] Added ... ",p->pid);
++      p_rqueue();
++      return 0;
++    }
++  }
++  /*else{
++    printf("Add failed, [pid-%d] state = %s\n", p->pid, printable_state(p->state));
++  }*/
++  
++  return -1;
++}
++/*
++  The function sorts the ready queue based on the tasks burst time
++*/
++void sort_rqueue()
++{
++  int i, j;
++  struct proc *element;
++  if (rqueue_len > 0)
++  {
++   /* printf("array before sorting: ");
++    for (i = 0; i < rqueue_len; i++)
++    {
++      printf("rqueue[%d]=[%d], ", i, rqueue[i]->burst);
++    }
++    printf("\n");
++*/
++    for (i = 1; i < rqueue_len; i++)
++    {
++      element = rqueue[i];
++
++      j = i - 1;
++      while (j >= 0 && rqueue[j]->burst > element->burst)
++      {
++        rqueue[j + 1] = rqueue[j];
++        j = j - 1;
++      }
++      rqueue[j + 1] = element;
++    }
++
++    printf("array after sorting: ");
++    for (i = 0; i < rqueue_len; i++)
++    {
++      printf("rqueue[%d]=[%d], ", i, rqueue[i]->burst);
++    }
++    printf("\n");
++    
++  }
++}
++
++/* Get the scheduler value */
++int rr_adaptive_val(void)
++{
++  int rr_adap_val = 0;
++  if (rqueue_len > 0)
++  {
++    /* To get RR adaptive value the ready queue MUST be sorted first */
++    sort_rqueue();
++
++    /* If number of tasks even, the Adaptive RR is the Avg */
++    if (rqueue_len % 2 == 0)
++    {
++      for (int i = 0; i < rqueue_len; i++)
++      {
++        rr_adap_val += rqueue[i]->burst;
++      }
++      rr_adap_val = (int)rr_adap_val / rqueue_len;
++      printf("---> RR Adaptive (AVG) = %d\n", rr_adap_val);
++    }
++    /* when tasks are odd no, the Adaptive RR is the median */
++    else
++    {
++      rr_adap_val = rqueue[rqueue_len / 2]->burst;
++      printf("---> RR Adaptive (MID) = %d\n", rr_adap_val);
++    }
++  }
++  else
++  {
++    /* Default RR value */
++    rr_adap_val = 1000;
++  }
++  return rr_adap_val;
++}
++
++#endif
+\ No newline at end of file
+diff --git a/kernel/proc.h b/kernel/proc.h
+index f6ca8b7..abdd9e6 100644
+--- a/kernel/proc.h
++++ b/kernel/proc.h
+@@ -92,6 +92,11 @@ struct proc {
+   int killed;                  // If non-zero, have been killed
+   int xstate;                  // Exit status to be returned to parent's wait
+   int pid;                     // Process ID
++  int rticks;                  // process run time in the cpu
++  int tticks;                  // total ticks
++  int wticks;                  // waiting ticks
++  int lticks;                  // last captured ticks
++  int burst;                   // burst value of the process
+ 
+   // wait_lock must be held when using this:
+   struct proc *parent;         // Parent process
+diff --git a/kernel/start.c b/kernel/start.c
+index 938e837..24a3ca3 100644
+--- a/kernel/start.c
++++ b/kernel/start.c
+@@ -65,7 +65,7 @@ timerinit()
+   int id = r_mhartid();
+ 
+   // ask the CLINT for a timer interrupt.
+-  int interval = 1000000; // cycles; about 1/10th second in qemu.
++  int interval = 1000000; // cycles; about 1/10th second in qemu. [1000000]
+   *(uint64*)CLINT_MTIMECMP(id) = *(uint64*)CLINT_MTIME + interval;
+ 
+   // prepare information in scratch[] for timervec.
+@@ -86,3 +86,36 @@ timerinit()
+   // enable machine-mode timer interrupts.
+   w_mie(r_mie() | MIE_MTIE);
+ }
++
++
++// funtion to change the scheduler interval
++// using new syscall "inter"
++int
++inter(int interval)
++{
++  intr_off();
++  long inter = interval * 1000;
++  //printf("syscall [inter] called with interval = %d\n", inter);
++  
++  // each CPU has a separate source of timer interrupts.
++  //int id = r_mhartid();
++
++  // change the scratch memory pointed by mscratch at initialization
++  uint64 *scratch = &timer_scratch[0][0];
++  //printf("scratch[4]; {0x%x}\n", scratch[4]);
++  scratch[4] = inter;
++  printf("syscall [inter] called with interval = {0x%x}\n", inter);
++
++  //printf("timer int REG mie {0x%x}\n", r_mie());
++  //printf("timer r_mstatus(): {0x%x}\n", r_mstatus());
++  //printf("hart id {%d}\n", r_mhartid());
++  intr_on();
++
++  return 0;
++}
++
++uint64 getinter(void)
++{
++  uint64 *scratch = &timer_scratch[0][0];
++  return scratch[4]/1000;
++}
+diff --git a/kernel/syscall.c b/kernel/syscall.c
+index ad9bbe2..ac10d1a 100644
+--- a/kernel/syscall.c
++++ b/kernel/syscall.c
+@@ -105,6 +105,8 @@ extern uint64 sys_wait(void);
+ extern uint64 sys_write(void);
+ extern uint64 sys_uptime(void);
+ extern uint64 sys_pcb(void);
++extern uint64 sys_inter(void);
++extern uint64 sys_ptick(void);
+ 
+ static uint64 (*syscalls[])(void) = {
+ [SYS_fork]    sys_fork,
+@@ -129,6 +131,8 @@ static uint64 (*syscalls[])(void) = {
+ [SYS_mkdir]   sys_mkdir,
+ [SYS_close]   sys_close,
+ [SYS_pcb]     sys_pcb,
++[SYS_inter]   sys_inter,
++[SYS_ptick]   sys_ptick,
+ };
+ 
+ void
+diff --git a/kernel/syscall.h b/kernel/syscall.h
+index e278845..5383d35 100644
+--- a/kernel/syscall.h
++++ b/kernel/syscall.h
+@@ -21,3 +21,5 @@
+ #define SYS_mkdir  20
+ #define SYS_close  21
+ #define SYS_pcb    22
++#define SYS_inter  23
++#define SYS_ptick  24
+\ No newline at end of file
+diff --git a/kernel/sysproc.c b/kernel/sysproc.c
+index b5a415d..32d5160 100644
+--- a/kernel/sysproc.c
++++ b/kernel/sysproc.c
+@@ -23,6 +23,13 @@ sys_getpid(void)
+   return myproc()->pid;
+ }
+ 
++uint64
++sys_ptick(void)
++{
++  //printf("proc id = %d, rticks = %d\n", myproc()->pid, myproc()->rticks);
++  return myproc()->rticks;
++}
++
+ uint64
+ sys_fork(void)
+ {
+@@ -91,6 +98,17 @@ sys_kill(void)
+   return kill(pid);
+ }
+ 
++
++uint64
++sys_inter(void)
++{
++  int interval;
++
++  if(argint(0, &interval) < 0)
++    return -1;
++  return inter(interval);
++}
++
+ // return how many clock tick interrupts have occurred
+ // since start.
+ uint64
+
+diff --git a/user/test.c b/user/test.c
+new file mode 100644
+index 0000000..7e9e441
+--- /dev/null
++++ b/user/test.c
+@@ -0,0 +1,66 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++
++//extern uint64 timer_scratch[1][5];
++
++int
++main(int argc, char *argv[])
++{
++  int n,s;
++
++  if(argc < 2){
++    n = 1;
++  }
++  else{
++    n = atoi( argv[1] );
++  }
++
++  if(argc < 3)
++    s = 1;
++  else
++    s = atoi ( argv[2] );
++
++
++  printf("start test process with %d children with alg. step %d\n", n, s);
++ /* uint64 *scratch = &timer_scratch[0][0];
++  printf("current timeInter = %d\n", scratch[4]);
++*/
++  int i;
++  int pid;
++  volatile unsigned int y,x,x2;
++  x2 = 1;
++  for (i =0 ; i < n ; i++){
++    printf("\n");
++    pid = fork();
++    if(pid < 0 ){
++      printf("Fork failed, pid = %d\n", pid);
++    }
++    else if (pid > 0){ // parent process
++      printf("[Parent-%d] creating child process -> {%d}\n", getpid(), pid);
++      for(y=0; y < 80000000; y+=s)
++      {
++        x = x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
++      }
++
++      printf("[Parent-%d] done with calculations, with %d ticks!\n", getpid(), ptick());
++      pcb();
++      printf("[Parent-%d] enter waiting state....\n", getpid());
++      wait(0);
++    } 
++    else{ // child process
++      printf("[child-%d] child process created\n", getpid());
++      for(y=0; y < 80000000; y+=s)
++      {
++        x = x + (356 * 34.1) * (356.86 * 356)/ 7149.08;
++        x2 = x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
++      }
++      printf("[child-%d] done with Calculations, with %d ticks!\n", getpid(), ptick());
++      break; // break the child loop to go to parent
++    }
++
++  }
++  printf("[exit-proc{%d}] total ticks = %d\n", getpid(), ptick());
++
++  exit(0);
++}
+diff --git a/user/test2.c b/user/test2.c
+new file mode 100644
+index 0000000..b811cb3
+--- /dev/null
++++ b/user/test2.c
+@@ -0,0 +1,22 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++
++//extern uint64 timer_scratch[1][5];
++
++int
++main(int argc, char *argv[])
++{
++  printf("[Process-%d]--> start test2 <--\n", getpid());
++  volatile unsigned int y,x,x2;
++  
++  for(y=0; y < 8000; y++)
++  {
++    x = x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
++    x2 = x;
++    printf("2");
++  }
++  printf("\n[Process-%d] done. scheduler %d ticks!\n", getpid(), ptick());
++  pcb();
++  exit(0);
++}
+diff --git a/user/test3.c b/user/test3.c
+new file mode 100644
+index 0000000..fd4db12
+--- /dev/null
++++ b/user/test3.c
+@@ -0,0 +1,23 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++
++//extern uint64 timer_scratch[1][5];
++
++int
++main(int argc, char *argv[])
++{
++  printf("[Process-%d]--> start test3 <--\n", getpid());
++  volatile unsigned int y,x,x2;
++  
++  for(y=0; y < 10000; y++)
++  {
++    x = x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
++    x2 =  x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
++    x2 = x;
++    printf("33");
++  }
++    printf("\n[Process-%d] done. scheduler %d ticks!\n", getpid(), ptick());
++  pcb();
++  exit(0);
++}
+diff --git a/user/test4.c b/user/test4.c
+new file mode 100644
+index 0000000..acc0703
+--- /dev/null
++++ b/user/test4.c
+@@ -0,0 +1,22 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++
++//extern uint64 timer_scratch[1][5];
++
++int
++main(int argc, char *argv[])
++{
++  printf("[Process-%d]--> start test4 <--\n",getpid());
++  volatile unsigned long y,x,x2;
++  
++  for(y=0; y < 15000; y++)
++  {
++    x = x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
++    x2 = x;
++    printf("44");
++  }
++  printf("\n[Process-%d] done. scheduler %d ticks!\n", getpid(), ptick());
++  pcb();
++  exit(0);
++}
+diff --git a/user/test5.c b/user/test5.c
+new file mode 100644
+index 0000000..2a89ca7
+--- /dev/null
++++ b/user/test5.c
+@@ -0,0 +1,25 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++
++//extern uint64 timer_scratch[1][5];
++
++int
++main(int argc, char *argv[])
++{
++  printf("[Process-%d]--> start test5 <--\n",getpid());
++  volatile unsigned int y,x,x2;
++  
++  for(y=0; y < 60000; y++)
++  {
++    x = x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
++    x = x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
++    x2 =  x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
++    x2 =  x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
++    x2 = x;
++    printf("5");
++  }
++  printf("\n[Process-%d] done. scheduler %d ticks!\n", getpid(), ptick());
++  pcb();
++  exit(0);
++}
+diff --git a/user/test6.c b/user/test6.c
+new file mode 100644
+index 0000000..3fb4370
+--- /dev/null
++++ b/user/test6.c
+@@ -0,0 +1,25 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++
++//extern uint64 timer_scratch[1][5];
++
++int
++main(int argc, char *argv[])
++{
++  printf("[Process-%d]--> start test6 <--\n",getpid());
++  volatile unsigned int y,x,x2;
++  
++  for(y=0; y < 9000; y++)
++  {
++    x = x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
++    x = x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
++    x2 =  x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
++    x2 =  x2 + (356 * 34.1) * (356.86 * 356)/ 7149.08;
++    x2 = x;
++    printf("6666");
++  }
++  printf("\n[Process-%d] done. scheduler %d ticks!\n", getpid(), ptick());
++  pcb();
++  exit(0);
++}
+diff --git a/user/testinter.c b/user/testinter.c
+new file mode 100644
+index 0000000..189bb4a
+--- /dev/null
++++ b/user/testinter.c
+@@ -0,0 +1,21 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++
++int
++main(int argc, char *argv[])
++{
++  int interval;
++
++  if(argc < 2){
++    fprintf(2, "usage: scheduler interval...\n");
++    exit(1);
++  }
++  interval = atoi( argv[1] );
++
++  printf("change scheduler with interval = [%d]\n", interval);
++  // syscall inter .. 
++  inter(interval);
++
++  exit(0);
++}
+diff --git a/user/testw.c b/user/testw.c
+new file mode 100644
+index 0000000..a746221
+--- /dev/null
++++ b/user/testw.c
+@@ -0,0 +1,12 @@
++#include "kernel/types.h"
++#include "kernel/stat.h"
++#include "user/user.h"
++
++int
++main(int argc, char *argv[])
++{
++  printf("start while(1)\n");
++  while(1);
++
++  exit(0);
++}
+diff --git a/user/user.h b/user/user.h
+index bdd4086..d1948d2 100644
+--- a/user/user.h
++++ b/user/user.h
+@@ -24,6 +24,8 @@ char* sbrk(int);
+ int sleep(int);
+ int uptime(void);
+ int pcb(void);
++int inter(int);
++int ptick(void);
+ 
+ // ulib.c
+ int stat(const char*, struct stat*);
+diff --git a/user/usys.pl b/user/usys.pl
+index bb74e62..1020c17 100755
+--- a/user/usys.pl
++++ b/user/usys.pl
+@@ -37,3 +37,5 @@ entry("sbrk");
+ entry("sleep");
+ entry("uptime");
+ entry("pcb");
++entry("inter");
++entry("ptick");
