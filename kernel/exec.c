@@ -11,7 +11,7 @@
 static int loadseg(pde_t *pgdir, uint64 addr, struct inode *ip, uint offset, uint sz);
 
 void
-setbrust(struct proc * p)
+setburst(struct proc * p)
 {
   if(strncmp(p->name, "test2", strlen(p->name))==0){
     p->burst = 11000;
@@ -142,8 +142,8 @@ exec(char *path, char **argv)
   p->trapframe->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);
 
-  //set the brust of each process
-  setbrust(p);
+  //set the burst of each process
+  setburst(p);
 
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
