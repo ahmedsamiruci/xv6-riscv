@@ -17,7 +17,7 @@ main(int argc, char *argv[])
     x2 = x;
     printf("33");
   }
-    printf("\n[pid-%d] test3 done. scheduler %d ticks!\n", getpid(), ptick());
+    printf("\n[pid-%d] done test3\n", getpid());
   pcb();
   exit(0);
 }

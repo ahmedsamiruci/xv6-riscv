@@ -33,9 +33,9 @@
 make qemu | ts '[%H:%M:%.S]' | tee -a ./testtime.txt
 
 // create/replace file
-make qemu | ts '[%H:%M:%.S]' | tee ./testtime.txt
+make qemu | ts '[%H:%M:%.S]' | tee ./parsing.txt
 
-
+make qemu | ts '[%H:%M:%.S]' | tee ./testqueu.txt
 
 test2 &;test3 &;test4 &;test5 &;test6 &;
 

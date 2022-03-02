@@ -19,7 +19,7 @@ main(int argc, char *argv[])
     x2 = x;
     printf("5");
   }
-  printf("\n[pid-%d] test5 done. scheduler %d ticks!\n", getpid(), ptick());
+  printf("\n[pid-%d] done test5\n", getpid());
   pcb();
   exit(0);
 }
