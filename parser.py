@@ -1,10 +1,17 @@
 from sys import exit, argv
 import parse_utils
+import datetime
 
 class TimeDiff():
     def __init__(self, startTime, endTime):
         self.startTime = startTime
         self.endTime = endTime
+
+    def getTimeDiff(self):
+        start = datetime.datetime.strptime(self.startTime, "%H:%M:%S.%f")
+        end = datetime.datetime.strptime(self.endTime, "%H:%M:%S.%f")
+        diff = end - start
+        return diff.total_seconds()
 
 class task():
     def __init__(self, arrivalTime):
@@ -13,7 +20,9 @@ class task():
         self.finishTime = 0
         self.runTimes = []
         self.waitTimes = []
-        self.totalTime = 0
+        self.turnAroundTime = 0 # from arrive time to complete the task
+        self.totalRunTime = 0
+        self.totalWaitTime = 0
 
     def addRunTime(self, startTime, endTime):
         self.runTimes.append(TimeDiff(startTime, endTime))
@@ -22,6 +31,18 @@ class task():
             # wait time = start ( previous run end time) , end ( new run start time)
             waitingTime = TimeDiff(self.runTimes[-2].endTime , self.runTimes[-1].startTime)
             self.waitTimes.append(waitingTime)
+
+    def calculate(self):
+        diff = TimeDiff(self.arrivalTime, self.finishTime)
+        self.turnAroundTime = diff.getTimeDiff()
+
+        #c Total Running Time
+        for runTime in self.runTimes:
+            self.totalRunTime += runTime.getTimeDiff()
+
+        # Total Waiting Time
+        for waitTime in self.waitTimes:
+            self.totalWaitTime += waitTime.getTimeDiff()
     
 
 class parser():
@@ -85,15 +106,63 @@ class parser():
             idx += 1
 
 
-def main():
+    def calculate(self):
+        print("\n\n\n")
+        print("--- Setup Results ---")
+        
+        AvgWaitingTime = 0
+        AvgTurnAroundTime = 0
+
+        for key in self.tasks:
+            taskVal = self.tasks[key]
+            taskVal.calculate()
+
+            AvgWaitingTime += taskVal.totalWaitTime
+            AvgTurnAroundTime += taskVal.turnAroundTime
+
+            print("[{}]\tRuning(s)= {:.4f}\tWaiting(s)= {:.4f}\tTAT(s)= {:.4f}".format(key,taskVal.totalRunTime,
+                                                            taskVal.totalWaitTime, taskVal.turnAroundTime))
+        print("--------------------")
+
+        AvgWaitingTime = AvgWaitingTime/len(self.tasks)
+        AvgTurnAroundTime = AvgTurnAroundTime/len(self.tasks)
+
+        return AvgWaitingTime, AvgTurnAroundTime
+
+def userTest():
     print("start parser program..")
-    if len(argv) < 2:
+    if len(argv) < 3:
         print ("usage: python3 parser.py logsfile.txt")
         exit(255)
 
-    p1 = parser(argv[1])
+    p = parser(argv[1])
+    p.calculate()
     
     print("Program finished")
+
+def internalTest():
+    adaptiveRR = parser("./AdaptiveRR.txt")
+    adapAvgWait, adapAvgTAT = adaptiveRR.calculate()
+
+    normalRR = parser("./NormalRR.txt")
+    avgWait, avgTAT = normalRR.calculate()
+
+    waitOpt = (adapAvgWait / avgWait)*100
+    tatOpt = (adapAvgTAT / avgTAT)*100
+
+    print("\n\n")
+    print("====> Summary: ")
+    print("\n----- Normal RR -----")
+    print("Avg Waiting Time= {:.4f} Sec \t Avg Turn Around Time= {:.4f} Sec".format(avgWait,avgTAT))
+    print("\n----- Adaptive RR -----")
+    print("Avg Waiting Time= {:.4f} Sec \t Avg Turn Around Time= {:.4f} Sec".format(adapAvgWait,adapAvgTAT))
+    print("\nAdaptive RR Enhance: Avg Waiting [{:.0f}%], Avg TAT [{:.0f}%]".format(waitOpt,tatOpt))
+    print("\n\n\n\n")
+
+def main():
+    #userTest()
+    internalTest()
+
 
 if __name__ == "__main__":
     main()
