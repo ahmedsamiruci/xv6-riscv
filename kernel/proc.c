@@ -6,7 +6,6 @@
 #include "proc.h"
 #include "defs.h"
 
-#define ADAPTIVE_RR
 
 struct cpu cpus[NCPU];
 
@@ -71,10 +70,12 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->kstack = KSTACK((int) (p - proc));
   }
+#ifdef ADAPTIVE_RR
   for(int i=0; i<NPROC; i++){
     rqueue[i] = 0;
   }
   //init_test();
+#endif
 }
 
 // Must be called with interrupts disabled,
@@ -167,7 +168,7 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
-  printf("[pid-%d] init ticks = %d\n", p->pid, p->lticks);
+  printf("[pid-%d] allocated, init ticks = %d\n", p->pid, p->lticks);
   return p;
 }
 
@@ -501,7 +502,6 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
-  int rr_timer = 0;
   int ptick;
   
   c->proc = 0;
@@ -514,7 +514,7 @@ scheduler(void)
     updatewait();
 
 #ifdef ADAPTIVE_RR
-    rr_timer = rr_adaptive_val();
+    int rr_timer = rr_adaptive_val();
     if(rr_timer != getinter())
     {
       inter(rr_timer);
