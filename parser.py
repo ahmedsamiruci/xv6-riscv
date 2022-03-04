@@ -147,8 +147,8 @@ def internalTest():
     normalRR = parser("./NormalRR.txt")
     avgWait, avgTAT = normalRR.calculate()
 
-    waitOpt = (adapAvgWait / avgWait)*100
-    tatOpt = (adapAvgTAT / avgTAT)*100
+    waitOpt = (1- (adapAvgWait / avgWait))*100
+    tatOpt = (1-(adapAvgTAT / avgTAT))*100
 
     print("\n\n")
     print("====> Summary: ")

@@ -48,8 +48,29 @@ test2 &;test3 &;test4 &;test5 &;test6 &;
 49      runble  test4   0       5
 51      runble  test5   0       4
 
-test4 = 21 ticks
-test2 = 36 ticks
-test3 = 64 ticks
-test6 = 94 ticks
-test5 = 121 ticks
+
+
+
+
+
+
+
+
+
+
+test2 = 11 ticks
+test3 = 27 ticks
+test4 = 39 ticks
+test6 = 52 ticks
+test5 = 78 ticks
+
+
+
+// Normal RR
+make qemu | ts '[%H:%M:%.S]' | tee ./NormalRR.txt
+
+make qemu | ts '[%H:%M:%.S]' | tee ./AdaptiveRR.txt
+
+test2 &;test3 &;test4 &;test5 &;test6 &;
+
+python3 parser.py
