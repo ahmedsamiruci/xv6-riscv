@@ -97,8 +97,16 @@ class parser():
             result, taskName = parse_utils.is_runTime(self.fileContent[idx])
             if result:
                 runStartTime = parse_utils.extract_time(self.fileContent[idx])
-                runFinishTime = parse_utils.extract_time(self.fileContent[idx+1])
-                idx += 1
+                # get finish time; sometimes the finish is not in the next line
+                finishidx = idx
+                ftaskName = taskName
+                result = True
+                while result & (ftaskName == taskName):
+                    finishidx += 1
+                    fresult, ftaskName = parse_utils.is_runTime(self.fileContent[finishidx])
+
+                runFinishTime = parse_utils.extract_time(self.fileContent[finishidx])
+                idx = finishidx - 1
                 #self.tasks[taskName].runTimes.append(TimeDiff(runStartTime, runFinishTime))
                 self.tasks[taskName].addRunTime(runStartTime, runFinishTime)
                 print("[task:{0}] run time, from:[{1}] to [{2}]".format(taskName,runStartTime,runFinishTime))
